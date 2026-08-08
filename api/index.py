@@ -436,20 +436,27 @@ HTML_TEMPLATE = """
         }
 
         async function triggerSync() {
-            const webhookUrl = document.getElementById('webhook_url').value.trim();
+            console.log("triggerSync() button clicked");
+            const webhookInput = document.getElementById('webhook_url');
+            const webhookUrl = webhookInput ? webhookInput.value.trim() : '';
+            const box = document.getElementById('status-box');
+
             if (!webhookUrl) {
-                alert('Please enter your Google Apps Script Webhook URL!');
+                box.style.display = 'block';
+                box.style.color = '#FCA5A5';
+                box.innerText = '⚠️ Please enter your Google Apps Script Webhook URL above before running sync!';
+                webhookInput.focus();
+                webhookInput.style.borderColor = '#EF4444';
                 return;
             }
-
+            webhookInput.style.borderColor = 'var(--card-border)';
             localStorage.setItem('google_webhook_url', webhookUrl);
 
             const btn = document.getElementById('sync-btn');
-            const box = document.getElementById('status-box');
-
             btn.disabled = true;
             btn.innerText = '⌛ Syncing with Telegram...';
             box.style.display = 'block';
+            box.style.color = '#A7F3D0';
             box.innerText = 'Connecting to Telegram...\nFetching new placement messages since last sync...';
 
         let totalAdded = 0;
