@@ -14,10 +14,12 @@ import urllib.error
 
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse
+from mangum import Mangum
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 
 app = FastAPI(title="Placement Scraper Dashboard")
+handler = Mangum(app)
 
 def parse_int_env(key: str, default: int = 0) -> int:
     val = os.environ.get(key, "").strip()
