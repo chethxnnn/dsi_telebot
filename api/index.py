@@ -372,7 +372,7 @@ HTML_TEMPLATE = """
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎓 Telegram Placement Scraper</h1>
+            <h1>Telegram Placement Scraper</h1>
             <p>One-click Cloud Sync to Google Sheets</p>
         </div>
 
@@ -382,7 +382,7 @@ HTML_TEMPLATE = """
                     <h2 style="font-size: 18px; margin: 0;">Telegram Status</h2>
                     <span style="font-size: 13px; color: var(--text-muted);">Target: Engineering 2026 batch (-1002020152383)</span>
                 </div>
-                <span class="badge">● Authorized</span>
+                <span class="badge">Authorized</span>
             </div>
 
             <div class="form-group">
@@ -390,7 +390,7 @@ HTML_TEMPLATE = """
                 <input type="url" id="webhook_url" placeholder="https://script.google.com/macros/s/.../exec" value="{{ default_webhook }}">
             </div>
 
-            <button type="button" class="btn" id="sync-btn" onclick="triggerSync()">⚡ Run Incremental Sync Now</button>
+            <button type="button" class="btn" id="sync-btn" onclick="triggerSync()">Run Incremental Sync Now</button>
 
             <div id="status-box"></div>
         </div>
@@ -404,7 +404,7 @@ HTML_TEMPLATE = """
                 <input type="url" id="sheet_url" placeholder="https://docs.google.com/spreadsheets/d/.../edit" oninput="saveSheetUrl()">
             </div>
 
-            <button type="button" class="btn btn-secondary" onclick="openSheet()">📊 Open Google Sheet</button>
+            <button type="button" class="btn btn-secondary" onclick="openSheet()">Open Google Sheet</button>
         </div>
     </div>
 
@@ -444,7 +444,7 @@ HTML_TEMPLATE = """
             if (!webhookUrl) {
                 box.style.display = 'block';
                 box.style.color = '#FCA5A5';
-                box.innerText = '⚠️ Please enter your Google Apps Script Webhook URL above before running sync!';
+                box.innerText = 'WARNING: Please enter your Google Apps Script Webhook URL above before running sync!';
                 webhookInput.focus();
                 webhookInput.style.borderColor = '#EF4444';
                 return;
@@ -454,70 +454,69 @@ HTML_TEMPLATE = """
 
             const btn = document.getElementById('sync-btn');
             btn.disabled = true;
-            btn.innerText = '⌛ Syncing with Telegram...';
+            btn.innerText = 'Syncing with Telegram...';
             box.style.display = 'block';
             box.style.color = '#A7F3D0';
             box.innerText = 'Connecting to Telegram...\nFetching new placement messages since last sync...';
 
-        let totalAdded = 0;
-        let totalProcessed = 0;
-        let totalSkipped = 0;
-        let lastId = 0;
-        let batchCount = 0;
+            let totalAdded = 0;
+            let totalProcessed = 0;
+            let totalSkipped = 0;
+            let lastId = 0;
+            let batchCount = 0;
 
-        async function syncBatch() {
-            batchCount++;
-            box.innerText = `⌛ Processing Batch #${batchCount}...\n` +
-                `Total Messages Processed: ${totalProcessed}\n` +
-                `Total Placement Rows Added: ${totalAdded}\n` +
-                `Skipped: ${totalSkipped}\n` +
-                `Last Message ID: ${lastId}`;
+            async function syncBatch() {
+                batchCount++;
+                box.innerText = 'Processing Batch #' + batchCount + '...\n' +
+                    'Total Messages Processed: ' + totalProcessed + '\n' +
+                    'Total Placement Rows Added: ' + totalAdded + '\n' +
+                    'Skipped: ' + totalSkipped + '\n' +
+                    'Last Message ID: ' + lastId;
 
-            const formData = new FormData();
-            formData.append('webhook_url', webhookUrl);
+                const formData = new FormData();
+                formData.append('webhook_url', webhookUrl);
 
-            const res = await fetch('/api/sync', {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (!res.ok) {
-                const text = await res.text();
-                throw new Error(`Server returned ${res.status}: ${text}`);
+                const res = await fetch('/api/sync', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!res.ok) {
+                    const text = await res.text();
+                    throw new Error('Server returned ' + res.status + ': ' + text);
+                }
+
+                const data = await res.json();
+                if (data.status !== 'success') {
+                    throw new Error(data.message || 'Sync failed');
+                }
+
+                totalProcessed += data.messages_processed || 0;
+                totalAdded += data.rows_added || 0;
+                totalSkipped += data.skipped || 0;
+                lastId = data.last_id || lastId;
+
+                if (data.has_more && data.messages_processed > 0) {
+                    await syncBatch();
+                } else {
+                    box.innerText = 'Sync Completed Successfully!\n\n' +
+                        'Total Messages Processed: ' + totalProcessed + '\n' +
+                        'Total Placement Rows Added: ' + totalAdded + '\n' +
+                        'Skipped: ' + totalSkipped + '\n' +
+                        'Last Message ID: ' + lastId;
+                }
             }
 
-            const data = await res.json();
-            if (data.status !== 'success') {
-                throw new Error(data.message || 'Sync failed');
-            }
-
-            totalProcessed += data.messages_processed || 0;
-            totalAdded += data.rows_added || 0;
-            totalSkipped += data.skipped || 0;
-            lastId = data.last_id || lastId;
-
-            if (data.has_more && data.messages_processed > 0) {
-                // Fetch next batch automatically
+            try {
                 await syncBatch();
-            } else {
-                box.innerText = `✅ All Sync Batches Completed!\n\n` +
-                    `Total Messages Processed: ${totalProcessed}\n` +
-                    `Total Placement Rows Added: ${totalAdded}\n` +
-                    `Skipped: ${totalSkipped}\n` +
-                    `Last Message ID: ${lastId}`;
+            } catch (err) {
+                box.innerText = 'Error: ' + err.message;
+                alert('Sync Error: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Run Incremental Sync Now';
             }
         }
-
-        try {
-            await syncBatch();
-        } catch (err) {
-            box.innerText = `❌ Error: ${err.message}`;
-            alert('Sync Error: ' + err.message);
-        } finally {
-            btn.disabled = false;
-            btn.innerText = '⚡ Run Incremental Sync Now';
-        }
-    }
     </script>
 </body>
 </html>
