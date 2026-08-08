@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Vercel Serverless Web Application for Telegram Placement Scraper
-Serves a modern single-page dashboard and handles incremental sync to Google Sheets.
+Vercel Serverless Web Application for Telegram Placement Scraper (Flask WSGI)
+Natively compatible with Vercel Python runtime.
 """
 
 import os
@@ -12,25 +12,21 @@ from typing import Optional
 import urllib.request
 import urllib.error
 
-from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse, JSONResponse
-from mangum import Mangum
+from flask import Flask, request, jsonify, render_template_string
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 
-app = FastAPI(title="Placement Scraper Dashboard")
-handler = Mangum(app)
+app = Flask(__name__)
 
+# Safe Environment Variable Parsing
 def parse_int_env(key: str, default: int = 0) -> int:
     val = os.environ.get(key, "").strip()
     return int(val) if val.lstrip('-').isdigit() else default
 
-# Safe Environment Variable Parsing
 DEFAULT_API_ID = parse_int_env("TELEGRAM_API_ID", 39806525)
 DEFAULT_API_HASH = os.environ.get("TELEGRAM_API_HASH", "20561160a2f41ad9cbb3f9e45e9bdf67")
 DEFAULT_SESSION_STRING = os.environ.get("TELEGRAM_SESSION_STRING", "1BVtsOHkBu7kXAtq0qkp9Iw8iknD56onfN5y5MdVv42D_sgoFkb-9bwt0c5DFVSBjw5T3BbDW5apscHjXR7sI2soMAnEo4BmzVUpR6KrIsF_PWjeg4zOlqB5BK2Z-w02D2-jCY00QhbO4ybhD8oQ4L4dQRhd1scPKB4Qy4oteLYdO3hyyE-IPd3wjGtK47KPiRL3pjQL3ckkqj-KQVePNNszaOW9FOnqb4E9n5uU_C95oS5ZaUPmkMkjNwHXLA9ILA-qGAuJnltuqjHUMM3eNF1Ei6Wx3eAOFY9xLirQbzIPThP1v-QSR5iKwi_8LfAZ31ecOswoklygwPIxwNHSUT34BTWX5Eio=")
 DEFAULT_GROUP_ID = os.environ.get("TELEGRAM_GROUP_ID", "-1002020152383")
-DEFAULT_WEBHOOK_URL = os.environ.get("GOOGLE_WEBHOOK_URL", "")
 
 # --- Extractor Utilities ---
 def is_placement_post(text: str) -> bool:
@@ -304,269 +300,194 @@ def parse_message(msg):
         'raw_message': text[:500]
     }
 
-# --- Web Application Routes ---
-@app.get("/", response_class=HTMLResponse)
-async def dashboard():
-    html_content = """
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Placement Telegram Scraper Dashboard</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-        <style>
-            :root {
-                --bg: #0F172A;
-                --card-bg: rgba(30, 41, 59, 0.7);
-                --card-border: rgba(255, 255, 255, 0.1);
-                --primary: #3B82F6;
-                --primary-hover: #2563EB;
-                --text-main: #F8FAFC;
-                --text-muted: #94A3B8;
-                --success: #10B981;
-                --warning: #F59E0B;
-            }
-            body {
-                font-family: 'Inter', sans-serif;
-                background-color: var(--bg);
-                color: var(--text-main);
-                margin: 0;
-                padding: 40px 20px;
-                display: flex;
-                justify-content: center;
-            }
-            .container {
-                max-width: 800px;
-                width: 100%;
-            }
-            .header {
-                text-align: center;
-                margin-bottom: 30px;
-            }
-            .header h1 {
-                font-size: 28px;
-                font-weight: 700;
-                margin: 0 0 8px 0;
-                background: linear-gradient(135deg, #60A5FA, #A78BFA);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-            }
-            .header p {
-                color: var(--text-muted);
-                margin: 0;
-                font-size: 14px;
-            }
-            .card {
-                background: var(--card-bg);
-                border: 1px solid var(--card-border);
-                backdrop-filter: blur(12px);
-                border-radius: 16px;
-                padding: 24px;
-                margin-bottom: 24px;
-                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
-            }
-            .form-group {
-                margin-bottom: 16px;
-            }
-            label {
-                display: block;
-                font-size: 13px;
-                font-weight: 500;
-                color: var(--text-muted);
-                margin-bottom: 6px;
-            }
-            input {
-                width: 100%;
-                padding: 12px;
-                border-radius: 8px;
-                border: 1px solid var(--card-border);
-                background: rgba(15, 23, 42, 0.6);
-                color: #FFF;
-                font-size: 14px;
-                box-sizing: border-box;
-            }
-            input:focus {
-                outline: none;
-                border-color: var(--primary);
-            }
-            .btn {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                width: 100%;
-                padding: 14px;
-                background: var(--primary);
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-size: 15px;
-                font-weight: 600;
-                cursor: pointer;
-                transition: background 0.2s, transform 0.1s;
-            }
-            .btn:hover {
-                background: var(--primary-hover);
-            }
-            .btn:active {
-                transform: scale(0.98);
-            }
-            .btn-secondary {
-                background: rgba(255, 255, 255, 0.1);
-                color: var(--text-main);
-                margin-top: 10px;
-            }
-            .btn-secondary:hover {
-                background: rgba(255, 255, 255, 0.18);
-            }
-            #status-box {
-                margin-top: 20px;
-                padding: 16px;
-                border-radius: 10px;
-                background: rgba(15, 23, 42, 0.8);
-                font-family: monospace;
-                font-size: 13px;
-                color: #A7F3D0;
-                display: none;
-                white-space: pre-wrap;
-            }
-            .badge {
-                display: inline-block;
-                padding: 4px 10px;
-                border-radius: 20px;
-                font-size: 12px;
-                font-weight: 600;
-                background: rgba(16, 185, 129, 0.15);
-                color: var(--success);
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h1>🎓 Telegram Placement Scraper</h1>
-                <p>One-click Cloud Sync to Google Sheets</p>
-            </div>
-
-            <div class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <div>
-                        <h2 style="font-size: 18px; margin: 0;">Telegram Status</h2>
-                        <span style="font-size: 13px; color: var(--text-muted);">Target: Engineering 2026 batch (-1002020152383)</span>
-                    </div>
-                    <span class="badge">● Authorized</span>
-                </div>
-
-                <form id="sync-form">
-                    <div class="form-group">
-                        <label for="webhook_url">Google Sheet Webhook URL</label>
-                        <input type="url" id="webhook_url" name="webhook_url" placeholder="https://script.google.com/macros/s/.../exec" required>
-                    </div>
-
-                    <button type="submit" class="btn" id="sync-btn">⚡ Run Incremental Sync Now</button>
-                </form>
-
-                <div id="status-box"></div>
-            </div>
-
-            <div class="card" style="text-align: center;">
-                <h3 style="font-size: 16px; margin-top: 0;">View Your Placement Data</h3>
-                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">Open your Google Sheet to view, filter, and export the real-time placement records.</p>
-                <a id="sheet-link" href="#" target="_blank" class="btn btn-secondary" style="text-decoration: none;">📊 Open Google Sheet</a>
-            </div>
+# --- Flask Web Application Routes ---
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Placement Telegram Scraper Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0F172A;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --primary: #3B82F6;
+            --primary-hover: #2563EB;
+            --text-main: #F8FAFC;
+            --text-muted: #94A3B8;
+            --success: #10B981;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container { max-width: 800px; width: 100%; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h1 {
+            font-size: 28px; font-weight: 700; margin: 0 0 8px 0;
+            background: linear-gradient(135deg, #60A5FA, #A78BFA);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .header p { color: var(--text-muted); margin: 0; font-size: 14px; }
+        .card {
+            background: var(--card-bg); border: 1px solid var(--card-border);
+            backdrop-filter: blur(12px); border-radius: 16px; padding: 24px;
+            margin-bottom: 24px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+        .form-group { margin-bottom: 16px; }
+        label { display: block; font-size: 13px; font-weight: 500; color: var(--text-muted); margin-bottom: 6px; }
+        input {
+            width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--card-border);
+            background: rgba(15, 23, 42, 0.6); color: #FFF; font-size: 14px; box-sizing: border-box;
+        }
+        input:focus { outline: none; border-color: var(--primary); }
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; width: 100%;
+            padding: 14px; background: var(--primary); color: white; border: none;
+            border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s, transform 0.1s;
+        }
+        .btn:hover { background: var(--primary-hover); }
+        .btn:active { transform: scale(0.98); }
+        .btn-secondary { background: rgba(255, 255, 255, 0.1); color: var(--text-main); margin-top: 10px; }
+        .btn-secondary:hover { background: rgba(255, 255, 255, 0.18); }
+        #status-box {
+            margin-top: 20px; padding: 16px; border-radius: 10px; background: rgba(15, 23, 42, 0.8);
+            font-family: monospace; font-size: 13px; color: #A7F3D0; display: none; white-space: pre-wrap;
+        }
+        .badge {
+            display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 12px;
+            font-weight: 600; background: rgba(16, 185, 129, 0.15); color: var(--success);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎓 Telegram Placement Scraper</h1>
+            <p>One-click Cloud Sync to Google Sheets</p>
         </div>
 
-        <script>
-            // Restore saved Webhook URL from localStorage
-            const savedWebhook = localStorage.getItem('google_webhook_url');
-            if (savedWebhook) {
-                document.getElementById('webhook_url').value = savedWebhook;
-                document.getElementById('sheet-link').href = savedWebhook.replace('/exec', '/edit');
-            }
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div>
+                    <h2 style="font-size: 18px; margin: 0;">Telegram Status</h2>
+                    <span style="font-size: 13px; color: var(--text-muted);">Target: Engineering 2026 batch (-1002020152383)</span>
+                </div>
+                <span class="badge">● Authorized</span>
+            </div>
 
-            document.getElementById('sync-form').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const webhookUrl = document.getElementById('webhook_url').value.trim();
-                localStorage.setItem('google_webhook_url', webhookUrl);
-                document.getElementById('sheet-link').href = webhookUrl.replace('/exec', '/edit');
+            <form id="sync-form">
+                <div class="form-group">
+                    <label for="webhook_url">Google Sheet Webhook URL</label>
+                    <input type="url" id="webhook_url" name="webhook_url" placeholder="https://script.google.com/macros/s/.../exec" required>
+                </div>
 
-                const btn = document.getElementById('sync-btn');
-                const box = document.getElementById('status-box');
+                <button type="submit" class="btn" id="sync-btn">⚡ Run Incremental Sync Now</button>
+            </form>
 
-                btn.disabled = true;
-                btn.innerText = '⌛ Syncing with Telegram...';
-                box.style.display = 'block';
-                box.innerText = 'Connecting to Telegram...\nFetching new messages since last sync...';
+            <div id="status-box"></div>
+        </div>
 
-                try {
-                    const res = await fetch('/api/sync', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: new URLSearchParams({ 'webhook_url': webhookUrl })
-                    });
-                    const data = await res.json();
-                    
-                    if (data.status === 'success') {
-                        box.innerText = `✅ Sync Complete!\n\nNew Messages Processed: ${data.messages_processed}\nNew Placement Rows Added: ${data.rows_added}\nSkipped: ${data.skipped}\nLast Message ID: ${data.last_id}`;
-                    } else {
-                        box.innerText = `❌ Error: ${data.message}`;
-                    }
-                } catch (err) {
-                    box.innerText = `❌ Request failed: ${err.message}`;
-                } finally {
-                    btn.disabled = false;
-                    btn.innerText = '⚡ Run Incremental Sync Now';
+        <div class="card" style="text-align: center;">
+            <h3 style="font-size: 16px; margin-top: 0;">View Your Placement Data</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">Open your Google Sheet to view, filter, and export real-time placement records.</p>
+            <a id="sheet-link" href="#" target="_blank" class="btn btn-secondary" style="text-decoration: none;">📊 Open Google Sheet</a>
+        </div>
+    </div>
+
+    <script>
+        const savedWebhook = localStorage.getItem('google_webhook_url');
+        if (savedWebhook) {
+            document.getElementById('webhook_url').value = savedWebhook;
+            document.getElementById('sheet-link').href = savedWebhook.replace('/exec', '/edit');
+        }
+
+        document.getElementById('sync-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const webhookUrl = document.getElementById('webhook_url').value.trim();
+            localStorage.setItem('google_webhook_url', webhookUrl);
+            document.getElementById('sheet-link').href = webhookUrl.replace('/exec', '/edit');
+
+            const btn = document.getElementById('sync-btn');
+            const box = document.getElementById('status-box');
+
+            btn.disabled = true;
+            btn.innerText = '⌛ Syncing with Telegram...';
+            box.style.display = 'block';
+            box.innerText = 'Connecting to Telegram...\nFetching new messages since last sync...';
+
+            try {
+                const formData = new FormData();
+                formData.append('webhook_url', webhookUrl);
+
+                const res = await fetch('/api/sync', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    box.innerText = `✅ Sync Complete!\n\nNew Messages Processed: ${data.messages_processed}\nNew Placement Rows Added: ${data.rows_added}\nSkipped: ${data.skipped}\nLast Message ID: ${data.last_id}`;
+                } else {
+                    box.innerText = `❌ Error: ${data.message}`;
                 }
-            });
-        </script>
-    </body>
-    </html>
-    """
-    return HTMLResponse(content=html_content)
+            } catch (err) {
+                box.innerText = `❌ Request failed: ${err.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.innerText = '⚡ Run Incremental Sync Now';
+            }
+        });
+    </script>
+</body>
+</html>
+"""
 
-@app.post("/api/sync")
-async def sync_placements(webhook_url: str = Form(...)):
-    if not webhook_url:
-        return JSONResponse({"status": "error", "message": "Webhook URL is required."}, status_code=400)
+@app.route("/", methods=["GET"])
+def dashboard():
+    return render_template_string(HTML_TEMPLATE)
 
+async def _async_sync(webhook_url: str):
     try:
-        # 1. Query Google Sheet via Webhook to get current last_id
         req_get = urllib.request.Request(webhook_url, method="GET")
         with urllib.request.urlopen(req_get, timeout=10) as resp:
             sheet_meta = json.loads(resp.read().decode('utf-8'))
             last_id = int(sheet_meta.get("last_id", 0))
-    except Exception as e:
+    except Exception:
         last_id = 0
 
-    # 2. Connect to Telethon statelessly using StringSession
-    try:
-        session = StringSession(DEFAULT_SESSION_STRING)
-        client = TelegramClient(session, DEFAULT_API_ID, DEFAULT_API_HASH)
-        await client.connect()
+    session = StringSession(DEFAULT_SESSION_STRING)
+    client = TelegramClient(session, DEFAULT_API_ID, DEFAULT_API_HASH)
+    await client.connect()
 
-        if not await client.is_user_authorized():
-            return JSONResponse({"status": "error", "message": "Telegram Session invalid or expired."}, status_code=401)
+    if not await client.is_user_authorized():
+        return {"status": "error", "message": "Telegram Session invalid or expired."}
 
-        group_entity = int(DEFAULT_GROUP_ID) if str(DEFAULT_GROUP_ID).lstrip('-').isdigit() else DEFAULT_GROUP_ID
-        messages = []
-        async for msg in client.iter_messages(group_entity, min_id=last_id, reverse=True):
-            if msg.text and not msg.action:
-                messages.append(msg)
+    group_entity = int(DEFAULT_GROUP_ID) if str(DEFAULT_GROUP_ID).lstrip('-').isdigit() else DEFAULT_GROUP_ID
+    messages = []
+    async for msg in client.iter_messages(group_entity, min_id=last_id, reverse=True):
+        if msg.text and not msg.action:
+            messages.append(msg)
 
-        await client.disconnect()
-    except Exception as e:
-        return JSONResponse({"status": "error", "message": f"Telegram API error: {str(e)}"}, status_code=500)
+    await client.disconnect()
 
     if not messages:
-        return JSONResponse({
+        return {
             "status": "success",
             "messages_processed": 0,
             "rows_added": 0,
             "skipped": 0,
             "last_id": last_id
-        })
+        }
 
-    # 3. Parse placement messages
     new_rows = []
     skipped = 0
     for msg in messages:
@@ -577,27 +498,39 @@ async def sync_placements(webhook_url: str = Form(...)):
 
     max_id = max(m.id for m in messages)
 
-    # 4. Post parsed rows + max_id to Google Sheet Webhook
-    try:
-        payload = json.dumps({
-            "rows": new_rows,
-            "last_id": max_id
-        }).encode('utf-8')
-        
-        req_post = urllib.request.Request(
-            webhook_url,
-            data=payload,
-            headers={"Content-Type": "application/json"}
-        )
-        with urllib.request.urlopen(req_post, timeout=30) as resp_post:
-            res_data = json.loads(resp_post.read().decode('utf-8'))
+    payload = json.dumps({
+        "rows": new_rows,
+        "last_id": max_id
+    }).encode('utf-8')
+    
+    req_post = urllib.request.Request(
+        webhook_url,
+        data=payload,
+        headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req_post, timeout=30) as resp_post:
+        res_data = json.loads(resp_post.read().decode('utf-8'))
 
-        return JSONResponse({
-            "status": "success",
-            "messages_processed": len(messages),
-            "rows_added": len(new_rows),
-            "skipped": skipped,
-            "last_id": max_id
-        })
+    return {
+        "status": "success",
+        "messages_processed": len(messages),
+        "rows_added": len(new_rows),
+        "skipped": skipped,
+        "last_id": max_id
+    }
+
+@app.route("/api/sync", methods=["POST"])
+def sync_placements():
+    webhook_url = request.form.get("webhook_url", "").strip()
+    if not webhook_url:
+        return jsonify({"status": "error", "message": "Webhook URL is required."}), 400
+
+    try:
+        result = asyncio.run(_async_sync(webhook_url))
+        status_code = 200 if result.get("status") == "success" else 500
+        return jsonify(result), status_code
     except Exception as e:
-        return JSONResponse({"status": "error", "message": f"Failed to post to Google Sheets: {str(e)}"}, status_code=500)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000)
