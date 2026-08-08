@@ -19,13 +19,10 @@ from telethon.sessions import StringSession
 
 app = FastAPI(title="Placement Scraper Dashboard")
 
-# Default Environment Variables (fallback to hardcoded setup if env vars not set)
-DEFAULT_API_ID = int(os.environ.get("TELEGRAM_API_ID", 39806525))
-DEFAULT_API_HASH = os.environ.get("TELEGRAM_API_HASH", "20561160a2f41ad9cbb3f9e45e9bdf67")
-DEFAULT_SESSION_STRING = os.environ.get(
-    "TELEGRAM_SESSION_STRING",
-    "1BVtsOHkBu7kXAtq0qkp9Iw8iknD56onfN5y5MdVv42D_sgoFkb-9bwt0c5DFVSBjw5T3BbDW5apscHjXR7sI2soMAnEo4BmzVUpR6KrIsF_PWjeg4zOlqB5BK2Z-w02D2-jCY00QhbO4ybhD8oQ4L4dQRhd1scPKB4Qy4oteLYdO3hyyE-IPd3wjGtK47KPiRL3pjQL3ckkqj-KQVePNNszaOW9FOnqb4E9n5uU_C95oS5ZaUPmkMkjNwHXLA9ILA-qGAuJnltuqjHUMM3eNF1Ei6Wx3eAOFY9xLirQbzIPThP1v-QSR5iKwi_8LfAZ31ecOswoklygwPIxwNHSUT34BTWX5Eio="
-)
+# Default Environment Variables
+DEFAULT_API_ID = int(os.environ.get("TELEGRAM_API_ID", 0))
+DEFAULT_API_HASH = os.environ.get("TELEGRAM_API_HASH", "")
+DEFAULT_SESSION_STRING = os.environ.get("TELEGRAM_SESSION_STRING", "")
 DEFAULT_GROUP_ID = os.environ.get("TELEGRAM_GROUP_ID", "-1002020152383")
 DEFAULT_WEBHOOK_URL = os.environ.get("GOOGLE_WEBHOOK_URL", "")
 

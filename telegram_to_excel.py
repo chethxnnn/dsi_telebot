@@ -17,9 +17,9 @@ from openpyxl.utils import get_column_letter
 # ==========================================
 # Configuration Block
 # ==========================================
-API_ID   = 39806525
-API_HASH = '20561160a2f41ad9cbb3f9e45e9bdf67'
-GROUP    = -1002020152383    # Engineering 2026 batch
+API_ID   = int(os.environ.get("TELEGRAM_API_ID", 0))
+API_HASH = os.environ.get("TELEGRAM_API_HASH", "YOUR_API_HASH")
+GROUP    = os.environ.get("TELEGRAM_GROUP_ID", "-1002020152383")
 EXCEL    = 'placements.xlsx'
 LAST_ID  = 'last_id.txt'
 

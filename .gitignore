@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.env
+*.session
+session.session
+last_id.txt
+placements.xlsx

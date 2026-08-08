@@ -5,11 +5,12 @@ This token lets Vercel connect to your Telegram account statelessly via an envir
 """
 
 import asyncio
+import os
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 
-API_ID   = 39806525
-API_HASH = '20561160a2f41ad9cbb3f9e45e9bdf67'
+API_ID   = int(os.environ.get("TELEGRAM_API_ID", 0))
+API_HASH = os.environ.get("TELEGRAM_API_HASH", "YOUR_API_HASH")
 
 async def main():
     # Load existing session file
