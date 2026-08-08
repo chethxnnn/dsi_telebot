@@ -353,6 +353,7 @@ HTML_TEMPLATE = """
             display: inline-flex; align-items: center; justify-content: center; width: 100%;
             padding: 14px; background: var(--primary); color: white; border: none;
             border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s, transform 0.1s;
+            text-decoration: none;
         }
         .btn:hover { background: var(--primary-hover); }
         .btn:active { transform: scale(0.98); }
@@ -384,22 +385,26 @@ HTML_TEMPLATE = """
                 <span class="badge">● Authorized</span>
             </div>
 
-            <form id="sync-form">
-                <div class="form-group">
-                    <label for="webhook_url">Google Sheet Webhook URL</label>
-                    <input type="url" id="webhook_url" name="webhook_url" placeholder="https://script.google.com/macros/s/.../exec" required>
-                </div>
+            <div class="form-group">
+                <label for="webhook_url">Google Apps Script Webhook URL</label>
+                <input type="url" id="webhook_url" placeholder="https://script.google.com/macros/s/.../exec" value="{{ default_webhook }}">
+            </div>
 
-                <button type="submit" class="btn" id="sync-btn">⚡ Run Incremental Sync Now</button>
-            </form>
+            <button type="button" class="btn" id="sync-btn" onclick="triggerSync()">⚡ Run Incremental Sync Now</button>
 
             <div id="status-box"></div>
         </div>
 
-        <div class="card" style="text-align: center;">
-            <h3 style="font-size: 16px; margin-top: 0;">View Your Placement Data</h3>
-            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">Open your Google Sheet to view, filter, and export real-time placement records.</p>
-            <a id="sheet-link" href="#" target="_blank" class="btn btn-secondary" style="text-decoration: none;">📊 Open Google Sheet</a>
+        <div class="card">
+            <h3 style="font-size: 16px; margin-top: 0; margin-bottom: 8px;">View Your Placement Data</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">Paste your Google Sheet link below to access your spreadsheet directly from here.</p>
+            
+            <div class="form-group">
+                <label for="sheet_url">Google Sheet View URL</label>
+                <input type="url" id="sheet_url" placeholder="https://docs.google.com/spreadsheets/d/.../edit" oninput="saveSheetUrl()">
+            </div>
+
+            <button type="button" class="btn btn-secondary" onclick="openSheet()">📊 Open Google Sheet</button>
         </div>
     </div>
 
@@ -407,14 +412,37 @@ HTML_TEMPLATE = """
         const savedWebhook = localStorage.getItem('google_webhook_url');
         if (savedWebhook) {
             document.getElementById('webhook_url').value = savedWebhook;
-            document.getElementById('sheet-link').href = savedWebhook.replace('/exec', '/edit');
         }
 
-        document.getElementById('sync-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
+        const savedSheetUrl = localStorage.getItem('google_sheet_url');
+        if (savedSheetUrl) {
+            document.getElementById('sheet_url').value = savedSheetUrl;
+        }
+
+        function saveSheetUrl() {
+            const url = document.getElementById('sheet_url').value.trim();
+            if (url) {
+                localStorage.setItem('google_sheet_url', url);
+            }
+        }
+
+        function openSheet() {
+            const url = document.getElementById('sheet_url').value.trim();
+            if (url) {
+                window.open(url, '_blank');
+            } else {
+                alert('Please enter your Google Sheet link first!');
+            }
+        }
+
+        async function triggerSync() {
             const webhookUrl = document.getElementById('webhook_url').value.trim();
+            if (!webhookUrl) {
+                alert('Please enter your Google Apps Script Webhook URL!');
+                return;
+            }
+
             localStorage.setItem('google_webhook_url', webhookUrl);
-            document.getElementById('sheet-link').href = webhookUrl.replace('/exec', '/edit');
 
             const btn = document.getElementById('sync-btn');
             const box = document.getElementById('status-box');
@@ -422,7 +450,7 @@ HTML_TEMPLATE = """
             btn.disabled = true;
             btn.innerText = '⌛ Syncing with Telegram...';
             box.style.display = 'block';
-            box.innerText = 'Connecting to Telegram...\nFetching new messages since last sync...';
+            box.innerText = 'Connecting to Telegram...\nFetching new placement messages since last sync...';
 
             try {
                 const formData = new FormData();
@@ -445,7 +473,7 @@ HTML_TEMPLATE = """
                 btn.disabled = false;
                 btn.innerText = '⚡ Run Incremental Sync Now';
             }
-        });
+        }
     </script>
 </body>
 </html>
@@ -453,7 +481,8 @@ HTML_TEMPLATE = """
 
 @app.route("/", methods=["GET"])
 def dashboard():
-    return render_template_string(HTML_TEMPLATE)
+    default_webhook = os.environ.get("GOOGLE_WEBHOOK_URL", "")
+    return render_template_string(HTML_TEMPLATE, default_webhook=default_webhook)
 
 async def _async_sync(webhook_url: str):
     try:
