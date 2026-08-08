@@ -452,28 +452,65 @@ HTML_TEMPLATE = """
             box.style.display = 'block';
             box.innerText = 'Connecting to Telegram...\nFetching new placement messages since last sync...';
 
-            try {
-                const formData = new FormData();
-                formData.append('webhook_url', webhookUrl);
+        let totalAdded = 0;
+        let totalProcessed = 0;
+        let totalSkipped = 0;
+        let lastId = 0;
+        let batchCount = 0;
 
-                const res = await fetch('/api/sync', {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await res.json();
-                
-                if (data.status === 'success') {
-                    box.innerText = `✅ Sync Complete!\n\nNew Messages Processed: ${data.messages_processed}\nNew Placement Rows Added: ${data.rows_added}\nSkipped: ${data.skipped}\nLast Message ID: ${data.last_id}`;
-                } else {
-                    box.innerText = `❌ Error: ${data.message}`;
-                }
-            } catch (err) {
-                box.innerText = `❌ Request failed: ${err.message}`;
-            } finally {
-                btn.disabled = false;
-                btn.innerText = '⚡ Run Incremental Sync Now';
+        async function syncBatch() {
+            batchCount++;
+            box.innerText = `⌛ Processing Batch #${batchCount}...\n` +
+                `Total Messages Processed: ${totalProcessed}\n` +
+                `Total Placement Rows Added: ${totalAdded}\n` +
+                `Skipped: ${totalSkipped}\n` +
+                `Last Message ID: ${lastId}`;
+
+            const formData = new FormData();
+            formData.append('webhook_url', webhookUrl);
+
+            const res = await fetch('/api/sync', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(`Server returned ${res.status}: ${text}`);
+            }
+
+            const data = await res.json();
+            if (data.status !== 'success') {
+                throw new Error(data.message || 'Sync failed');
+            }
+
+            totalProcessed += data.messages_processed || 0;
+            totalAdded += data.rows_added || 0;
+            totalSkipped += data.skipped || 0;
+            lastId = data.last_id || lastId;
+
+            if (data.has_more && data.messages_processed > 0) {
+                // Fetch next batch automatically
+                await syncBatch();
+            } else {
+                box.innerText = `✅ All Sync Batches Completed!\n\n` +
+                    `Total Messages Processed: ${totalProcessed}\n` +
+                    `Total Placement Rows Added: ${totalAdded}\n` +
+                    `Skipped: ${totalSkipped}\n` +
+                    `Last Message ID: ${lastId}`;
             }
         }
+
+        try {
+            await syncBatch();
+        } catch (err) {
+            box.innerText = `❌ Error: ${err.message}`;
+            alert('Sync Error: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerText = '⚡ Run Incremental Sync Now';
+        }
+    }
     </script>
 </body>
 </html>
@@ -502,7 +539,8 @@ async def _async_sync(webhook_url: str):
 
     group_entity = int(DEFAULT_GROUP_ID) if str(DEFAULT_GROUP_ID).lstrip('-').isdigit() else DEFAULT_GROUP_ID
     messages = []
-    async for msg in client.iter_messages(group_entity, min_id=last_id, reverse=True):
+    # Limit to 250 messages per HTTP call to fit comfortably inside Vercel's 10s function limit
+    async for msg in client.iter_messages(group_entity, min_id=last_id, limit=250, reverse=True):
         if msg.text and not msg.action:
             messages.append(msg)
 
@@ -514,7 +552,8 @@ async def _async_sync(webhook_url: str):
             "messages_processed": 0,
             "rows_added": 0,
             "skipped": 0,
-            "last_id": last_id
+            "last_id": last_id,
+            "has_more": False
         }
 
     new_rows = []
@@ -526,6 +565,7 @@ async def _async_sync(webhook_url: str):
         new_rows.append(parse_message(msg))
 
     max_id = max(m.id for m in messages)
+    has_more = len(messages) >= 250
 
     payload = json.dumps({
         "rows": new_rows,
@@ -545,7 +585,8 @@ async def _async_sync(webhook_url: str):
         "messages_processed": len(messages),
         "rows_added": len(new_rows),
         "skipped": skipped,
-        "last_id": max_id
+        "last_id": max_id,
+        "has_more": has_more
     }
 
 @app.route("/api/sync", methods=["POST"])
