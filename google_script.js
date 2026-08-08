@@ -1,36 +1,66 @@
 /**
- * Google Apps Script for Placement Scraper Sheet Integration (Ultra Fast Bulk Insert)
- * Paste this in your Google Sheet -> Extensions -> Apps Script
- * Then click Deploy -> Manage Deployments -> Edit -> New Version -> Deploy.
+ * Google Apps Script for Placement Scraper Sheet Integration
+ * Automatically maintains 5 Category Sheets:
+ *   1. All Placements (Master)
+ *   2. IT & Software
+ *   3. Sales & Business Dev
+ *   4. Marketing
+ *   5. Core & Other
  */
+
+function setupHeaders(sheet) {
+  var headers = [
+    'Date', 'Company', 'Role', 'Category', 'Salary (Probation)', 'Salary (Post-Probation)', 
+    'Salary (Raw)', 'Location', 'Eligibility', 'Registration Link', 
+    'Deadline', 'Needs Review', 'Message Link', 'Raw Message'
+  ];
+  sheet.appendRow(headers);
+  var headerRange = sheet.getRange(1, 1, 1, headers.length);
+  headerRange.setFontWeight("bold");
+  headerRange.setBackground("#2F5496");
+  headerRange.setFontColor("#FFFFFF");
+  sheet.setFrozenRows(1);
+}
+
+function getOrInitSheet(ss, name) {
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+  }
+  if (sheet.getLastRow() === 0) {
+    setupHeaders(sheet);
+  }
+  return sheet;
+}
 
 function doPost(e) {
   try {
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
     var data = JSON.parse(e.postData.contents);
     
-    // 1. Initialize headers if sheet is empty
-    if (sheet.getLastRow() === 0) {
-      var headers = [
-        'Date', 'Company', 'Role', 'Salary (Probation)', 'Salary (Post-Probation)', 
-        'Salary (Raw)', 'Location', 'Eligibility', 'Registration Link', 
-        'Deadline', 'Needs Review', 'Message Link', 'Raw Message'
-      ];
-      sheet.appendRow(headers);
-      var headerRange = sheet.getRange(1, 1, 1, headers.length);
-      headerRange.setFontWeight("bold");
-      headerRange.setBackground("#2F5496");
-      headerRange.setFontColor("#FFFFFF");
-      sheet.setFrozenRows(1);
-    }
-    
-    // 2. Fast Bulk Insert (setValues)
+    // Ensure all 5 category sheets exist
+    var allSheet = getOrInitSheet(ss, 'All Placements');
+    var itSheet = getOrInitSheet(ss, 'IT & Software');
+    var salesSheet = getOrInitSheet(ss, 'Sales & Business Dev');
+    var mktSheet = getOrInitSheet(ss, 'Marketing');
+    var coreSheet = getOrInitSheet(ss, 'Core & Other');
+
     if (data.rows && data.rows.length > 0) {
-      var newRows = data.rows.map(function(row) {
-        return [
+      // Group rows by target sheet
+      var grouped = {
+        'All Placements': [],
+        'IT & Software': [],
+        'Sales & Business Dev': [],
+        'Marketing': [],
+        'Core & Other': []
+      };
+
+      data.rows.forEach(function(row) {
+        var rowArr = [
           row.date || '',
           row.company || '',
           row.role || '',
+          row.category || '',
           row.salary_probation || '',
           row.salary_post_probation || '',
           row.salary_raw || '',
@@ -42,13 +72,30 @@ function doPost(e) {
           row.message_link || '',
           row.raw_message || ''
         ];
+        
+        grouped['All Placements'].push(rowArr);
+        
+        var cat = row.category || 'Core & Other';
+        if (grouped[cat]) {
+          grouped[cat].push(rowArr);
+        } else {
+          grouped['Core & Other'].push(rowArr);
+        }
       });
-      sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, 13).setValues(newRows);
+
+      // Ultra-fast bulk setValues insert for each sheet
+      Object.keys(grouped).forEach(function(sheetName) {
+        var rowsToInsert = grouped[sheetName];
+        if (rowsToInsert.length > 0) {
+          var targetSheet = getOrInitSheet(ss, sheetName);
+          targetSheet.getRange(targetSheet.getLastRow() + 1, 1, rowsToInsert.length, 14).setValues(rowsToInsert);
+        }
+      });
     }
-    
-    // 3. Save last_id in cell Z1
+
+    // Save last_id in cell Z1 of master sheet
     if (data.last_id) {
-      sheet.getRange("Z1").setValue(data.last_id);
+      allSheet.getRange("Z1").setValue(data.last_id);
     }
     
     return ContentService.createTextOutput(JSON.stringify({
@@ -66,11 +113,12 @@ function doPost(e) {
 }
 
 function doGet(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var lastId = sheet.getRange("Z1").getValue() || 0;
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var allSheet = getOrInitSheet(ss, 'All Placements');
+  var lastId = allSheet.getRange("Z1").getValue() || 0;
   return ContentService.createTextOutput(JSON.stringify({
     "status": "success",
-    "total_rows": Math.max(0, sheet.getLastRow() - 1),
+    "total_rows": Math.max(0, allSheet.getLastRow() - 1),
     "last_id": parseInt(lastId) || 0
   })).setMimeType(ContentService.MimeType.JSON);
 }

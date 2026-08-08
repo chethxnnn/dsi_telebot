@@ -31,7 +31,7 @@ def main():
             pass
 
     keys = [
-        'date', 'company', 'role', 'salary_probation', 'salary_post_probation',
+        'date', 'company', 'role', 'category', 'salary_probation', 'salary_post_probation',
         'salary_raw', 'location', 'eligibility', 'registration_link', 'deadline',
         'needs_review', 'message_link', 'raw_message'
     ]
@@ -42,6 +42,22 @@ def main():
         for col_idx, k in enumerate(keys, 1):
             val = ws.cell(row=row, column=col_idx).value
             row_dict[k] = str(val) if val is not None else ""
+        
+        # Categorize
+        role = row_dict['role'].lower()
+        comp = row_dict['company'].lower()
+        raw = row_dict['raw_message'].lower()
+        combined = f"{role} {comp} {raw}"
+
+        if any(kw in role for kw in ['sales', 'bda', 'bde', 'business development', 'client handling', 'lead generation', 'inside sales', 'telecaller', 'prospecting', 'account executive']) or any(kw in combined for kw in ['business development executive', 'business development associate', 'bde role', 'bda role']):
+            row_dict['category'] = 'Sales & Business Dev'
+        elif any(kw in role for kw in ['marketing', 'content writer', 'seo', 'social media', 'digital marketing', 'brand', 'media', 'growth hacker', 'copywriter']) or any(kw in combined for kw in ['marketing intern', 'digital marketing executive']):
+            row_dict['category'] = 'Marketing'
+        elif any(kw in role for kw in ['software', 'sde', 'developer', 'full stack', 'frontend', 'backend', 'devops', 'qa', 'testing', 'data analyst', 'data scientist', 'system engineer', 'trainee engineer', 'programmer', 'cyber', 'cloud', 'ui/ux', 'web', 'mobile', 'ai', 'ml', 'code', 'python', 'java', 'c++', 'tech', 'genc', 'analyst trainee', 'internship', 'consultant']) or any(kw in combined for kw in ['software development engineer', 'programmer analyst', 'system engineer', 'genc', 'hackwithinfy', 'codevita']):
+            row_dict['category'] = 'IT & Software'
+        else:
+            row_dict['category'] = 'Core & Other'
+
         all_rows.append(row_dict)
 
     print(f"Read {len(all_rows)} rows from Excel.")

@@ -19,6 +19,7 @@ from openpyxl.utils import get_column_letter
 # ==========================================
 API_ID   = int(os.environ.get("TELEGRAM_API_ID", 39806525))
 API_HASH = os.environ.get("TELEGRAM_API_HASH", "20561160a2f41ad9cbb3f9e45e9bdf67")
+GROUP    = os.environ.get("TELEGRAM_GROUP_ID", "-1002020152383")
 GOOGLE_WEBHOOK_URL = os.environ.get("GOOGLE_WEBHOOK_URL", "https://script.google.com/macros/s/AKfycbzak0HaxgSXI-QF2k0xUSIj3gjVIFOtIJ5dJU2hTOLkopmwzO2tKTeLGhlj8SyoqLCa/exec")
 EXCEL    = 'placements.xlsx'
 LAST_ID  = 'last_id.txt'
@@ -104,7 +105,8 @@ def extract_company(text):
         'ask how', 'updates', 'policy', 'note', 'important note', 'final reminder',
         'gentle reminder', 'call for', 'incorrect', 'who can participate',
         'registration deadline', 'test configuration', 'public keys', 'the company',
-        'for women coders', 'challenge alert'
+        'for women coders', 'challenge alert', 'this is an', 'office', 'webinar',
+        'you can view', 'we are excited'
     }
 
     def clean_comp_name(name):
@@ -116,7 +118,7 @@ def extract_company(text):
         name = re.sub(r'\s*[\-\:]\s*All\s+Branches.*$', '', name, flags=re.IGNORECASE).strip()
         name = re.sub(r'[^\w\s\-\&\.\,\']', '', name).strip('- ').strip()
         
-        if name.lower() in invalid_companies or any(inv in name.lower() for inv in ['registration', 'updates', 'reminder', 'highlight', 'webinar']):
+        if name.lower() in invalid_companies or any(inv in name.lower() for inv in ['registration', 'updates', 'reminder', 'highlight', 'webinar', 'volunteer']):
             return None
         if len(name.split()) > 7 or len(name) > 60:
             return None
@@ -126,39 +128,47 @@ def extract_company(text):
     m1 = re.search(r'Company\s*:\s*(.+)', text, re.IGNORECASE)
     if m1:
         val = clean_comp_name(m1.group(1).strip().split('\n')[0].strip())
-        if val:
-            return val
+        if val: return val
     
-    # Priority 2: "Greetings from X"
-    m2 = re.search(r'Greetings from\s+(.+?)[\.!\n]', text, re.IGNORECASE)
+    # Priority 2: "Greetings from X", "from X!", "by X"
+    m2 = re.search(r'(?:Greetings\s+from|from|by)\s+([A-Z][A-Za-z0-9\s\-\&\.]{2,30}?)(?:[\.!\n]|\s+is\s+|\s+has\s+|\s+invites|\s+hiring|$)', text)
     if m2:
         val = clean_comp_name(m2.group(1).strip())
-        if val:
-            return val
+        if val and len(val.split()) <= 5: return val
     
-    # Priority 3: "X is hiring" / "X is currently hiring"
-    m3 = re.search(r'^(.+?)\s+is\s+(?:currently\s+)?(?:hiring|recruiting)', text, re.IGNORECASE | re.MULTILINE)
+    # Priority 3: "X is hiring" / "X is currently hiring" / "X wants to hire"
+    m3 = re.search(r'^([A-Z][A-Za-z0-9\s\-\&]{2,30}?)\s+(?:is\s+(?:currently\s+)?(?:hiring|recruiting)|wants to hire)', text, re.MULTILINE)
     if m3:
         val = clean_comp_name(m3.group(1).strip())
-        if val:
-            return val
-    
-    # Priority 4: "X wants to hire"
-    m4 = re.search(r'^(.+?)\s+wants to hire', text, re.IGNORECASE | re.MULTILINE)
+        if val: return val
+
+    # Priority 4: "X Campus Drive" or "X Off-Campus" or "X Internship"
+    m4 = re.search(r'([A-Z][A-Za-z0-9\s\-\&]{2,30}?)\s+(?:Campus\s+(?:Drive|Recruitment)|Off[- ]?Campus|Internship\s+Hiring|Innovation\s+Challenge|CodeVita|Hackathon)', text)
     if m4:
         val = clean_comp_name(m4.group(1).strip())
-        if val:
-            return val
-    
-    # Priority 5: "X Campus drive" or "X Campus Recruitment" in first line
-    first_line = text.split('\n')[0].strip()
-    m5 = re.match(r'^[^\w]*([\w][\w\s\-\&\.]+?)\s*(?:Campus\s+(?:drive|recruitment)|Recruitment|Off[- ]?Campus)', first_line, re.IGNORECASE)
-    if m5:
-        val = clean_comp_name(m5.group(1))
-        if val:
-            return val
-    
+        if val: return val
+
+    # Priority 5: Known Corporate / Tech Companies List
+    known_companies = [
+        'Accenture', 'Adobe', 'Airbus', 'Amazon', 'Atlassian', 'Atlas Copco',
+        'BTL India', 'Bosch', 'Capgemini', 'Chemiasoft', 'Cognite', 'Cognizant',
+        'DRDO', 'DeltaX', 'EdgeVerve', 'Edgeverve Systems', 'EY', 'Finacle',
+        'Flipkart', 'Fractal', 'Geeks Kepler', 'Google', 'HCLTECH', 'HCL',
+        'IBM', 'Infosys', 'Internshala', 'Kirloskar', 'KNS Properties', "L'Oréal",
+        'Luminous Power Technologies', 'Mayura Consultancy Services', 'Microsoft',
+        'NEXANOVA PROTECH', 'P&G', 'Proctor and Gamble', 'PeopleHum', 'Recruit CRM',
+        'Paxcom India', 'Profound Edutech', 'Reliance Industries', 'RIL',
+        'SAP India', 'SAP LABS', 'SAP', 'Schneider Electric', 'ServiceNow',
+        'Smarsh', 'SmartFalcon', 'StoneX', 'TCS', 'Tata Steel', 'Tata Elxsi',
+        'Talent Battle', 'Talview', 'Tally Solutions', 'Teamlease', 'TheMathCompany',
+        'TVS Credit', 'TVS', 'Unisys', 'Unstop', 'VISA', 'Walmart', 'ZS', 'cvDragon'
+    ]
+    for kc in known_companies:
+        if re.search(rf'\b{re.escape(kc)}\b', text, re.IGNORECASE):
+            return kc
+
     # Priority 6: First line ONLY if it looks like a clean company name
+    first_line = text.split('\n')[0].strip()
     clean_line = re.sub(r'[^\w\s\-,\&]', '', first_line).strip()
     clean_line = re.sub(r'\s*-\s*\d{4}', '', clean_line).strip()
     suffixes = [r'Campus\s+drive', r'Hiring', r'Recruitment', r'Placements?', r'Drive']
@@ -170,13 +180,36 @@ def extract_company(text):
                  'final reminder', 'students', 'all ', 'this ', 'today', 'we ', 'the ',
                  'registration', 'who can', 'ask how', 'only for', 'gentle reminder',
                  'call for', 'incorrect', 'job description']
-    if clean_line and len(clean_line.split()) <= 5:
+    if clean_line and len(clean_line.split()) <= 4:
         if not any(clean_line.lower().startswith(g) for g in greetings):
             val = clean_comp_name(clean_line)
-            if val:
-                return val
+            if val: return val
     
     return None
+
+def classify_category(row):
+    """Categorize row into IT & Software, Sales & Business Dev, Marketing, or Core & Other."""
+    role = (row.get('role') or '').lower()
+    comp = (row.get('company') or '').lower()
+    raw = (row.get('raw_message') or '').lower()
+    combined = f"{role} {comp} {raw}"
+
+    # 1. Sales & Business Development
+    sales_kws = ['sales', 'bda', 'bde', 'business development', 'client handling', 'lead generation', 'inside sales', 'telecaller', 'prospecting', 'account executive']
+    if any(kw in combined for kw in sales_kws):
+        return 'Sales & Business Dev'
+
+    # 2. Marketing
+    mkt_kws = ['marketing', 'content writer', 'seo', 'social media', 'digital marketing', 'brand', 'media', 'growth hacker', 'copywriter']
+    if any(kw in combined for kw in mkt_kws):
+        return 'Marketing'
+
+    # 3. IT & Software / Tech
+    it_kws = ['software', 'sde', 'developer', 'full stack', 'frontend', 'backend', 'devops', 'qa', 'testing', 'data analyst', 'data scientist', 'system engineer', 'trainee engineer', 'programmer', 'cyber', 'cloud', 'ui/ux', 'web', 'mobile', 'ai', 'ml', 'coding', 'coder', 'python', 'java', 'c++', 'tech', 'genc', 'analyst trainee', 'hackwithinfy', 'codevita', 'codebrewers', 'grid 6.0', 'telisport']
+    if any(kw in combined for kw in it_kws):
+        return 'IT & Software'
+
+    return 'Core & Other'
 
 def extract_roles(text):
     """Extract job role/title names — NOT responsibilities, instructions, or URLs."""
@@ -408,6 +441,7 @@ def parse_message(msg):
         'date': msg.date.strftime('%Y-%m-%d') if msg.date else '',
         'company': company,
         'role': role_str,
+        'category': '',  # Will be set below
         'salary_probation': salary['probation'],
         'salary_post_probation': salary['post_probation'],
         'salary_raw': salary['raw'],
@@ -419,34 +453,27 @@ def parse_message(msg):
         'message_link': f'https://t.me/c/{chat_id}/{msg.id}' if chat_id else '',
         'raw_message': text[:500]
     }
+    row['category'] = classify_category(row)
     return row
 
 # ==========================================
 # 6. Excel Handler
 # ==========================================
-def ensure_excel(filepath):
-    if os.path.exists(filepath):
-        wb = load_workbook(filepath)
-        ws = wb.active
-        return wb, ws
-    
-    wb = Workbook()
-    ws = wb.active
-    ws.title = 'Placements'
+CATEGORY_SHEETS = ['All Placements', 'IT & Software', 'Sales & Business Dev', 'Marketing', 'Core & Other']
+
+def setup_sheet_headers(ws):
     headers = [
-        'Date', 'Company', 'Role', 'Salary (Probation)', 'Salary (Post-Probation)', 
+        'Date', 'Company', 'Role', 'Category', 'Salary (Probation)', 'Salary (Post-Probation)', 
         'Salary (Raw)', 'Location', 'Eligibility', 'Registration Link', 
         'Deadline', 'Needs Review', 'Message Link', 'Raw Message'
     ]
     ws.append(headers)
     
-    # Header styling
     header_font = Font(bold=True, color='FFFFFF', size=11)
     header_fill = PatternFill(start_color='2F5496', end_color='2F5496', fill_type='solid')
     header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
-    thin_border = Border(
-        bottom=Side(style='thin', color='2F5496')
-    )
+    thin_border = Border(bottom=Side(style='thin', color='2F5496'))
+    
     for cell in ws[1]:
         cell.font = header_font
         cell.fill = header_fill
@@ -456,64 +483,88 @@ def ensure_excel(filepath):
     ws.freeze_panes = 'A2'
     ws.auto_filter.ref = ws.dimensions
     ws.row_dimensions[1].height = 30
-    
-    return wb, ws
 
-def append_rows(ws, rows):
+def ensure_excel(filepath):
+    if os.path.exists(filepath):
+        wb = load_workbook(filepath)
+        for cat in CATEGORY_SHEETS:
+            if cat not in wb.sheetnames:
+                ws = wb.create_sheet(title=cat)
+                setup_sheet_headers(ws)
+        return wb
+    
+    wb = Workbook()
+    ws_main = wb.active
+    ws_main.title = CATEGORY_SHEETS[0]
+    setup_sheet_headers(ws_main)
+    
+    for cat in CATEGORY_SHEETS[1:]:
+        ws = wb.create_sheet(title=cat)
+        setup_sheet_headers(ws)
+        
+    return wb
+
+def append_rows_categorized(wb, rows):
     count = 0
     keys = [
-        'date', 'company', 'role', 'salary_probation', 'salary_post_probation',
+        'date', 'company', 'role', 'category', 'salary_probation', 'salary_post_probation',
         'salary_raw', 'location', 'eligibility', 'registration_link', 'deadline',
         'needs_review', 'message_link', 'raw_message'
     ]
-    # Alternating row colors
     light_fill = PatternFill(start_color='F2F7FB', end_color='F2F7FB', fill_type='solid')
     white_fill = PatternFill(start_color='FFFFFF', end_color='FFFFFF', fill_type='solid')
     
     for r in rows:
-        ws.append([r[k] for k in keys])
-        row_num = ws.max_row
-        fill = light_fill if row_num % 2 == 0 else white_fill
-        for cell in ws[row_num]:
-            cell.fill = fill
-            cell.alignment = Alignment(vertical='top', wrap_text=False)
+        cat = r.get('category', 'Core & Other')
+        # Always add to 'All Placements' and its specific category sheet
+        target_sheets = [wb['All Placements']]
+        if cat in wb.sheetnames:
+            target_sheets.append(wb[cat])
+            
+        for ws in target_sheets:
+            ws.append([r[k] for k in keys])
+            row_num = ws.max_row
+            fill = light_fill if row_num % 2 == 0 else white_fill
+            for cell in ws[row_num]:
+                cell.fill = fill
+                cell.alignment = Alignment(vertical='top', wrap_text=False)
         count += 1
     return count
 
-def format_columns(ws):
-    """Apply column-specific widths and alignment to fit content cleanly."""
-    # Column widths tuned per field
+def format_all_sheets(wb):
     col_config = {
         'A': {'width': 12, 'align': 'center'},     # Date
         'B': {'width': 22, 'align': 'left'},        # Company
         'C': {'width': 32, 'align': 'left'},        # Role
-        'D': {'width': 20, 'align': 'center'},      # Salary (Probation)
-        'E': {'width': 22, 'align': 'center'},      # Salary (Post-Probation)
-        'F': {'width': 30, 'align': 'left'},        # Salary (Raw)
-        'G': {'width': 28, 'align': 'left'},        # Location
-        'H': {'width': 35, 'align': 'left'},        # Eligibility
-        'I': {'width': 40, 'align': 'left'},        # Registration Link
-        'J': {'width': 22, 'align': 'center'},      # Deadline
-        'K': {'width': 14, 'align': 'center'},      # Needs Review
-        'L': {'width': 35, 'align': 'left'},        # Message Link
-        'M': {'width': 50, 'align': 'left'},        # Raw Message
+        'D': {'width': 20, 'align': 'center'},      # Category
+        'E': {'width': 20, 'align': 'center'},      # Salary (Probation)
+        'F': {'width': 22, 'align': 'center'},      # Salary (Post-Probation)
+        'G': {'width': 30, 'align': 'left'},        # Salary (Raw)
+        'H': {'width': 28, 'align': 'left'},        # Location
+        'I': {'width': 35, 'align': 'left'},        # Eligibility
+        'J': {'width': 40, 'align': 'left'},        # Registration Link
+        'K': {'width': 22, 'align': 'center'},      # Deadline
+        'L': {'width': 14, 'align': 'center'},      # Needs Review
+        'M': {'width': 35, 'align': 'left'},        # Message Link
+        'N': {'width': 50, 'align': 'left'},        # Raw Message
     }
     
-    for col_letter, config in col_config.items():
-        ws.column_dimensions[col_letter].width = config['width']
-        align = Alignment(horizontal=config['align'], vertical='top', wrap_text=(col_letter in ('F', 'H', 'M')))
-        for row in range(2, ws.max_row + 1):
-            cell = ws[f'{col_letter}{row}']
-            cell.alignment = align
-    
-    # Highlight "Yes" in Needs Review column with a soft red
     review_fill = PatternFill(start_color='FCE4E4', end_color='FCE4E4', fill_type='solid')
     review_font = Font(color='C00000', bold=True)
-    for row in range(2, ws.max_row + 1):
-        cell = ws[f'K{row}']
-        if cell.value == 'Yes':
-            cell.fill = review_fill
-            cell.font = review_font
+
+    for ws in wb.worksheets:
+        for col_letter, config in col_config.items():
+            ws.column_dimensions[col_letter].width = config['width']
+            align = Alignment(horizontal=config['align'], vertical='top', wrap_text=(col_letter in ('G', 'I', 'N')))
+            for row in range(2, ws.max_row + 1):
+                cell = ws[f'{col_letter}{row}']
+                cell.alignment = align
+        
+        for row in range(2, ws.max_row + 1):
+            cell = ws[f'L{row}']
+            if cell.value == 'Yes':
+                cell.fill = review_fill
+                cell.font = review_font
 
 # ==========================================
 # 7. Main Flow
@@ -545,9 +596,9 @@ async def main():
     max_id = max(m.id for m in messages)
     
     if all_rows:
-        wb, ws = ensure_excel(EXCEL)
-        count = append_rows(ws, all_rows)
-        format_columns(ws)
+        wb = ensure_excel(EXCEL)
+        count = append_rows_categorized(wb, all_rows)
+        format_all_sheets(wb)
         try:
             wb.save(EXCEL)
             print(f'Added {count} rows to {EXCEL}')
