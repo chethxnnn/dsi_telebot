@@ -9,8 +9,8 @@ from telethon.errors import RPCError
 
 import os
 
-API_ID   = int(os.environ.get("TELEGRAM_API_ID", 0))       # Set TELEGRAM_API_ID env var or paste your API ID
-API_HASH = os.environ.get("TELEGRAM_API_HASH", "YOUR_API_HASH")  # Set TELEGRAM_API_HASH env var or paste your API Hash
+API_ID   = int(os.environ.get("TELEGRAM_API_ID", 39806525))
+API_HASH = os.environ.get("TELEGRAM_API_HASH", "20561160a2f41ad9cbb3f9e45e9bdf67")
 
 client = TelegramClient('session', API_ID, API_HASH)
 

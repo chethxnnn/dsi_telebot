@@ -17,11 +17,32 @@ from openpyxl.utils import get_column_letter
 # ==========================================
 # Configuration Block
 # ==========================================
-API_ID   = int(os.environ.get("TELEGRAM_API_ID", 0))
-API_HASH = os.environ.get("TELEGRAM_API_HASH", "YOUR_API_HASH")
-GROUP    = os.environ.get("TELEGRAM_GROUP_ID", "-1002020152383")
+API_ID   = int(os.environ.get("TELEGRAM_API_ID", 39806525))
+API_HASH = os.environ.get("TELEGRAM_API_HASH", "20561160a2f41ad9cbb3f9e45e9bdf67")
+GOOGLE_WEBHOOK_URL = os.environ.get("GOOGLE_WEBHOOK_URL", "https://script.google.com/macros/s/AKfycbzak0HaxgSXI-QF2k0xUSIj3gjVIFOtIJ5dJU2hTOLkopmwzO2tKTeLGhlj8SyoqLCa/exec")
 EXCEL    = 'placements.xlsx'
 LAST_ID  = 'last_id.txt'
+
+def sync_to_google_sheet(rows, max_id):
+    if not GOOGLE_WEBHOOK_URL or not rows:
+        return
+    try:
+        import urllib.request
+        import json
+        print("Syncing new rows to Google Sheets...")
+        payload = json.dumps({
+            "rows": rows,
+            "last_id": max_id
+        }).encode('utf-8')
+        req = urllib.request.Request(
+            GOOGLE_WEBHOOK_URL,
+            data=payload,
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            print("Successfully synced to Google Sheets!")
+    except Exception as e:
+        print(f"Google Sheets sync warning: {e}")
 
 # ==========================================
 # 1. Last ID Tracking
@@ -531,6 +552,7 @@ async def main():
             wb.save(EXCEL)
             print(f'Added {count} rows to {EXCEL}')
             write_last_id(max_id)  # Only update after successful save
+            sync_to_google_sheet(all_rows, max_id)
             print(f'Processed {len(messages)} messages ({skipped} skipped). Last ID: {max_id}')
         except PermissionError:
             print(f"Error: {EXCEL} is locked. Please close it in Excel and try again.")

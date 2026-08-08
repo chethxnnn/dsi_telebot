@@ -1,10 +1,7 @@
 /**
- * Google Apps Script for Placement Scraper Sheet Integration
+ * Google Apps Script for Placement Scraper Sheet Integration (Ultra Fast Bulk Insert)
  * Paste this in your Google Sheet -> Extensions -> Apps Script
- * Then click Deploy -> New deployment -> Select type: Web App
- *   - Execute as: Me
- *   - Who has access: Anyone
- * Copy the Web App URL into your Vercel / Web App settings.
+ * Then click Deploy -> Manage Deployments -> Edit -> New Version -> Deploy.
  */
 
 function doPost(e) {
@@ -27,10 +24,10 @@ function doPost(e) {
       sheet.setFrozenRows(1);
     }
     
-    // 2. Append rows
+    // 2. Fast Bulk Insert (setValues)
     if (data.rows && data.rows.length > 0) {
-      data.rows.forEach(function(row) {
-        sheet.appendRow([
+      var newRows = data.rows.map(function(row) {
+        return [
           row.date || '',
           row.company || '',
           row.role || '',
@@ -44,8 +41,9 @@ function doPost(e) {
           row.needs_review || '',
           row.message_link || '',
           row.raw_message || ''
-        ]);
+        ];
       });
+      sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, 13).setValues(newRows);
     }
     
     // 3. Save last_id in cell Z1
